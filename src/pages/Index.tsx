@@ -4,27 +4,39 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import Icon from '@/components/ui/icon';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isAddPlayerOpen, setIsAddPlayerOpen] = useState(false);
+  const [newPlayer, setNewPlayer] = useState({
+    nickname: '',
+    faction: '',
+    role: '',
+    status: 'offline'
+  });
 
   // Mock данные для демонстрации
-  const serverStats = {
+  const [serverStats, setServerStats] = useState({
     totalPlayers: 247,
     onlinePlayers: 189,
     afkPlayers: 32,
     offlinePlayers: 26,
     uptime: '7д 14ч 32м'
-  };
+  });
 
-  const players = [
+  const [players, setPlayers] = useState([
     { id: 1, nickname: 'ShadowKiller', status: 'online', faction: 'Полиция', role: 'Лейтенант', playtime: '45ч 12м' },
     { id: 2, nickname: 'NightRider', status: 'afk', faction: 'Мафия', role: 'Советник', playtime: '123ч 45м' },
     { id: 3, nickname: 'StreetRacer', status: 'offline', faction: 'Автосалон', role: 'Менеджер', playtime: '89ч 23м' },
     { id: 4, nickname: 'CityGuard', status: 'online', faction: 'Полиция', role: 'Капитан', playtime: '156ч 11м' },
     { id: 5, nickname: 'BusinessMan', status: 'online', faction: 'Мэрия', role: 'Мэр', playtime: '201ч 33м' }
-  ];
+  ]);
 
   const factions = [
     { name: 'Полиция', leader: 'CityGuard', members: 45, color: 'blue' },
@@ -33,7 +45,47 @@ const Index = () => {
     { name: 'Автосалон', leader: 'StreetRacer', members: 19, color: 'yellow' }
   ];
 
-  const getStatusBadge = (status: string) => {
+  const updatePlayerStatus = (playerId: number, newStatus: string) => {
+    setPlayers(prev => prev.map(player => 
+      player.id === playerId ? { ...player, status: newStatus } : player
+    ));
+    
+    // Обновляем статистику сервера
+    const updatedPlayers = players.map(player => 
+      player.id === playerId ? { ...player, status: newStatus } : player
+    );
+    
+    const onlineCount = updatedPlayers.filter(p => p.status === 'online').length;
+    const afkCount = updatedPlayers.filter(p => p.status === 'afk').length;
+    const offlineCount = updatedPlayers.filter(p => p.status === 'offline').length;
+    
+    setServerStats(prev => ({
+      ...prev,
+      onlinePlayers: onlineCount,
+      afkPlayers: afkCount,
+      offlinePlayers: offlineCount
+    }));
+  };
+
+  const addNewPlayer = () => {
+    if (newPlayer.nickname && newPlayer.faction && newPlayer.role) {
+      const newId = Math.max(...players.map(p => p.id)) + 1;
+      const playerToAdd = {
+        ...newPlayer,
+        id: newId,
+        playtime: '0ч 0м'
+      };
+      
+      setPlayers(prev => [...prev, playerToAdd]);
+      setServerStats(prev => ({ ...prev, totalPlayers: prev.totalPlayers + 1 }));
+      
+      // Сбрасываем форму
+      setNewPlayer({ nickname: '', faction: '', role: '', status: 'offline' });
+      setIsAddPlayerOpen(false);
+    }
+  };
+
+  const getStatusBadge = (status: string, playerId?: number) => {
     const styles = {
       online: 'status-online',
       afk: 'status-afk',
@@ -45,6 +97,33 @@ const Index = () => {
       afk: 'АФК',
       offline: 'Офлайн'
     };
+
+    if (playerId) {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Badge className={`${styles[status as keyof typeof styles]} text-xs cursor-pointer hover:opacity-80 transition-opacity`}>
+              {labels[status as keyof typeof labels]}
+              <Icon name="ChevronDown" size={12} className="ml-1" />
+            </Badge>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => updatePlayerStatus(playerId, 'online')}>
+              <Icon name="Circle" className="w-2 h-2 mr-2 fill-green-500 text-green-500" />
+              Онлайн
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => updatePlayerStatus(playerId, 'afk')}>
+              <Icon name="Clock" className="w-3 h-3 mr-2 text-yellow-500" />
+              АФК
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => updatePlayerStatus(playerId, 'offline')}>
+              <Icon name="Circle" className="w-2 h-2 mr-2 fill-red-500 text-red-500" />
+              Офлайн
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
 
     return (
       <Badge className={`${styles[status as keyof typeof styles]} text-xs`}>
@@ -221,10 +300,89 @@ const Index = () => {
           <TabsContent value="players" className="space-y-6 animate-fadeIn">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold">Управление игроками</h2>
-              <Button className="gta-gradient text-white">
-                <Icon name="UserPlus" size={16} className="mr-2" />
-                Добавить игрока
-              </Button>
+              <Dialog open={isAddPlayerOpen} onOpenChange={setIsAddPlayerOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gta-gradient text-white">
+                    <Icon name="UserPlus" size={16} className="mr-2" />
+                    Добавить игрока
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Добавить нового игрока</DialogTitle>
+                    <DialogDescription>
+                      Введите данные для создания нового игрока в системе.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="nickname" className="text-right">
+                        Никнейм
+                      </Label>
+                      <Input
+                        id="nickname"
+                        value={newPlayer.nickname}
+                        onChange={(e) => setNewPlayer({...newPlayer, nickname: e.target.value})}
+                        className="col-span-3"
+                        placeholder="Введите никнейм"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="faction" className="text-right">
+                        Фракция
+                      </Label>
+                      <Select value={newPlayer.faction} onValueChange={(value) => setNewPlayer({...newPlayer, faction: value})}>
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Выберите фракцию" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Полиция">Полиция</SelectItem>
+                          <SelectItem value="Мафия">Мафия</SelectItem>
+                          <SelectItem value="Мэрия">Мэрия</SelectItem>
+                          <SelectItem value="Автосалон">Автосалон</SelectItem>
+                          <SelectItem value="Больница">Больница</SelectItem>
+                          <SelectItem value="СМИ">СМИ</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="role" className="text-right">
+                        Роль
+                      </Label>
+                      <Input
+                        id="role"
+                        value={newPlayer.role}
+                        onChange={(e) => setNewPlayer({...newPlayer, role: e.target.value})}
+                        className="col-span-3"
+                        placeholder="Введите роль"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="status" className="text-right">
+                        Статус
+                      </Label>
+                      <Select value={newPlayer.status} onValueChange={(value) => setNewPlayer({...newPlayer, status: value})}>
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="online">Онлайн</SelectItem>
+                          <SelectItem value="afk">АФК</SelectItem>
+                          <SelectItem value="offline">Офлайн</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAddPlayerOpen(false)}>
+                      Отмена
+                    </Button>
+                    <Button onClick={addNewPlayer} className="gta-gradient text-white">
+                      Добавить игрока
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
 
             <Card className="card-gradient">
@@ -250,7 +408,7 @@ const Index = () => {
                           <p className="text-sm">{player.playtime}</p>
                           <p className="text-xs text-muted-foreground">наиграно</p>
                         </div>
-                        {getStatusBadge(player.status)}
+                        {getStatusBadge(player.status, player.id)}
                         <Button variant="outline" size="sm">
                           <Icon name="MoreHorizontal" size={16} />
                         </Button>
